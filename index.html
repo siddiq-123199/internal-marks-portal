@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Internal Marks Management Portal</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- SheetJS for Excel Exports -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #printableArea, #printableArea * { visibility: visible; }
+      #printableArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 20px;
+        background: white;
+        color: black;
+      }
+      .no-print { display: none !important; }
+      @page { size: A4 portrait; margin: 15mm; }
+      table { border-collapse: collapse !important; width: 100% !important; }
+      th, td { border: 1px solid #333 !important; padding: 6px 8px !important; font-size: 11px !important; }
+      thead { display: table-header-group; }
+      tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 font-sans antialiased">
+
+  <div id="app" class="min-h-screen flex flex-col"></div>
+
+  <!-- Forgot Password & OTP Modal -->
+  <div id="forgotModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 overflow-hidden">
+      <div class="flex justify-between items-center pb-3 border-b mb-4">
+        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-key text-indigo-600"></i> Reset Password via Email OTP</h3>
+        <button onclick="closeForgotModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+      </div>
+
+      <div id="forgotStep1" class="space-y-4">
+        <p class="text-xs text-gray-600">Enter your registered username and email address to receive a verification OTP.</p>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Username</label>
+          <input type="text" id="forgotUsername" required class="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="faculty_id">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Gmail / Email Address</label>
+          <input type="email" id="forgotEmail" required class="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="faculty@college.edu">
+        </div>
+        <div class="pt-2 flex justify-end gap-2">
+          <button onclick="closeForgotModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs rounded-lg">Cancel</button>
+          <button onclick="sendPasswordResetOTP()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow">Send OTP</button>
+        </div>
+      </div>
+
+      <div id="forgotStep2" class="space-y-4 hidden">
+        <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-xs text-emerald-800">
+          <i class="fa-solid fa-circle-check mr-1"></i> OTP sent successfully to your email! (Check notification popup).
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Enter 6-Digit OTP</label>
+          <input type="text" id="forgotOtpInput" maxlength="6" class="w-full border rounded px-3 py-2 text-center text-lg font-mono tracking-widest outline-none focus:ring-2 focus:ring-indigo-500" placeholder="123456">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">New Password</label>
+          <input type="password" id="forgotNewPassword" class="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••">
+        </div>
+        <div class="pt-2 flex justify-end gap-2">
+          <button onclick="closeForgotModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs rounded-lg">Cancel</button>
+          <button onclick="verifyAndResetPassword()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow">Verify & Reset Password</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Single / Continuous Add Student Modal -->
+  <div id="studentModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 overflow-hidden">
+      <div class="flex justify-between items-center pb-3 border-b mb-4">
+        <h3 id="studentModalTitle" class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-user-plus text-indigo-600"></i> Add Student Marks</h3>
+        <button onclick="closeStudentModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+      </div>
+
+      <form id="studentForm" onsubmit="handleStudentFormSubmit(event)" class="space-y-3">
+        <input type="hidden" id="editOriginalRoll">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Roll No</label>
+            <input type="text" id="fRoll" required class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Student Name</label>
+            <input type="text" id="fName" required class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Series 1 Mark</label>
+            <input type="number" id="fS1" step="0.5" class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500" value="0">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Series 2 Mark</label>
+            <input type="number" id="fS2" step="0.5" class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500" value="0">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Assignment 1 Mark</label>
+            <input type="number" id="fA1" step="0.5" class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500" value="0">
+          </div>
+          <div id="fAss2Container">
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Assignment 2 Mark</label>
+            <input type="number" id="fA2" step="0.5" class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500" value="0">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Attendance Percentage (%)</label>
+          <input type="number" id="fAtt" step="0.1" class="w-full border rounded px-3 py-1.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500" value="85">
+        </div>
+
+        <div class="mt-6 pt-4 border-t flex justify-between items-center">
+          <button type="button" onclick="closeStudentModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs rounded-lg">Cancel</button>
+          <div id="modalActionButtons" class="flex gap-2"></div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bulk Paste Students Modal -->
+  <div id="bulkModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 overflow-hidden">
+      <div class="flex justify-between items-center pb-3 border-b mb-4">
+        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-600"></i> Bulk Paste Student Roster (Excel / List)</h3>
+        <button onclick="closeBulkModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+      </div>
+
+      <div class="space-y-4">
+        <p class="text-xs text-gray-600">Excel sheet-il ninnu <b>Roll Number</b>yum <b>Student Name</b>um orumichu copy cheythu taazhe ulla box-il <b>Paste (Ctrl+V)</b> cheyyuka.</p>
+        <div>
+          <textarea id="bulkTextArea" rows="6" placeholder="Example:
+1	Aarav Nair
+2	Ananya Sharma" class="w-full border rounded-lg p-3 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+        </div>
+      </div>
+
+      <div class="mt-6 pt-4 border-t flex justify-end gap-3">
+        <button onclick="closeBulkModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs rounded-lg">Cancel</button>
+        <button onclick="processBulkPaste()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow">Import & Place in Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules & Weightage Configuration Modal -->
+  <div id="configModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full p-6 overflow-hidden">
+      <div class="flex justify-between items-center pb-3 border-b mb-4">
+        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-sliders text-amber-600"></i> Internal Marks Configuration & Pass Criteria</h3>
+        <button onclick="closeConfigModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+      </div>
+
+      <div class="space-y-5 max-h-[75vh] overflow-y-auto pr-2">
+        <div class="bg-amber-50 p-3 rounded-lg border border-amber-200">
+          <h4 class="font-bold text-xs uppercase tracking-wider text-amber-800 mb-2">Internal Passing Mark Threshold</h4>
+          <div class="flex items-center gap-3">
+            <label class="text-xs text-gray-700 font-semibold">Minimum Mark Required to Pass:</label>
+            <input type="number" id="modalPassMark" class="w-24 border rounded px-3 py-1.5 text-sm font-bold bg-white" step="0.5" min="0">
+          </div>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-xs uppercase tracking-wider text-indigo-600 mb-2">1. Series Exams (Raw to Target Conversion)</h4>
+          <div class="grid grid-cols-2 gap-3 mb-2">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Series 1 Max (Raw Input)</label>
+              <input type="number" id="modalS1Max" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="1">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Series 2 Max (Raw Input)</label>
+              <input type="number" id="modalS2Max" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="1">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Series Target Weightage (Each Series)</label>
+            <input type="number" id="modalTargetSeries" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="0" step="0.5">
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <h4 class="font-bold text-xs uppercase tracking-wider text-indigo-600 mb-2">2. Assignments (Raw to Target Conversion)</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Assignment Mode</label>
+              <select id="modalAssMode" onchange="toggleAssModeInputs()" class="w-full border rounded px-3 py-1.5 text-sm bg-white font-semibold">
+                <option value="1">1 Assignment</option>
+                <option value="2">2 Assignments</option>
+              </select>
+            </div>
+            <div id="divAss1Max">
+              <label class="block text-xs text-gray-600 mb-1" id="labelAss1">Assgn 1 Max (Raw)</label>
+              <input type="number" id="modalAss1Max" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="1">
+            </div>
+            <div id="divAss2Max">
+              <label class="block text-xs text-gray-600 mb-1">Assgn 2 Max (Raw)</label>
+              <input type="number" id="modalAss2Max" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="1">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Target Converted Assignment Weightage</label>
+            <input type="number" id="modalTargetAssignment" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="0" step="0.5">
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <h4 class="font-bold text-xs uppercase tracking-wider text-indigo-600 mb-2">3. Attendance Tier Rules & Weightage</h4>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Max Attendance Marks</label>
+              <input type="number" id="modalTargetAttendance" class="w-full border rounded px-3 py-1.5 text-sm font-semibold" min="0" step="0.5">
+            </div>
+          </div>
+          <div class="bg-gray-50 p-3 rounded-lg border space-y-2 text-xs">
+            <p class="font-bold text-gray-700">Custom Attendance Marks Allocation (% Thresholds):</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div><label class="block text-[11px] text-gray-500">>= 90% Marks</label><input type="number" id="tier90" class="w-full border rounded px-2 py-1 font-semibold bg-white" step="0.5"></div>
+              <div><label class="block text-[11px] text-gray-500">>= 85% Marks</label><input type="number" id="tier85" class="w-full border rounded px-2 py-1 font-semibold bg-white" step="0.5"></div>
+              <div><label class="block text-[11px] text-gray-500">>= 80% Marks</label><input type="number" id="tier80" class="w-full border rounded px-2 py-1 font-semibold bg-white" step="0.5"></div>
+              <div><label class="block text-[11px] text-gray-500">>= 75% Marks</label><input type="number" id="tier75" class="w-full border rounded px-2 py-1 font-semibold bg-white" step="0.5"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t pt-3 bg-indigo-50 p-3 rounded-lg flex justify-between items-center">
+          <span class="text-xs font-bold text-indigo-900">Total Calculated Internal Max:</span>
+          <input type="number" id="modalTargetTotal" class="w-20 border rounded px-2 py-1 text-sm font-bold bg-white text-indigo-700 text-center" readonly>
+        </div>
+
+        <div class="border-t pt-4">
+          <h4 class="font-bold text-xs uppercase tracking-wider text-indigo-600 mb-2">4. Round Off & Precision Settings</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1">Round Off Method</label>
+              <select id="modalRoundMethod" class="w-full border rounded px-3 py-1.5 text-sm bg-white">
+                <option value="none">Exact Decimals (e.g. 32.45)</option>
+                <option value="standard">Standard Rounding (>= 0.5 Round Up)</option>
+                <option value="ceil">Ceiling / Always Round Up</option>
+                <option value="floor">Floor / Always Round Down</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1">Decimal Places</label>
+              <select id="modalDecimalPlaces" class="w-full border rounded px-3 py-1.5 text-sm bg-white">
+                <option value="2">2 Decimal Places</option>
+                <option value="1">1 Decimal Place</option>
+                <option value="0">0 Decimal Places (Nearest Integer)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 pt-4 border-t flex justify-end gap-3">
+        <button onclick="closeConfigModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs rounded-lg">Cancel</button>
+        <button onclick="saveConfigFromModal()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow">Save Rules & Recalculate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- A4 Print Modal Window -->
+  <div id="printModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="p-4 bg-gray-900 text-white flex justify-between items-center no-print">
+        <h3 class="font-bold flex items-center gap-2"><i class="fa-solid fa-print text-indigo-400"></i> A4 Printable Document Preview</h3>
+        <div class="flex items-center gap-3">
+          <select id="printFilterSelect" onchange="updatePrintPreviewContent()" class="text-xs bg-gray-800 text-white border border-gray-700 rounded px-2 py-1 font-semibold">
+            <option value="all">Show All Students</option>
+            <option value="passed">Passed Students Only</option>
+            <option value="failed">Failed Students Only</option>
+          </select>
+          <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition">
+            <i class="fa-solid fa-file-pdf"></i> Print / Save as PDF
+          </button>
+          <button onclick="closePrintModal()" class="text-gray-400 hover:text-white text-xl px-2">×</button>
+        </div>
+      </div>
+      <div class="p-8 overflow-y-auto bg-gray-50 flex justify-center">
+        <div id="printableArea" class="bg-white p-8 border rounded shadow-md w-full max-w-[210mm] min-h-[297mm]"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const AppData = {
+      currentUser: JSON.parse(localStorage.getItem('portal_user')) || null,
+      users: JSON.parse(localStorage.getItem('portal_users')) || [],
+      userProjectsStore: JSON.parse(localStorage.getItem('portal_user_projects')) || {},
+      currentProjectId: null,
+      currentView: 'auth',
+      authMode: 'login'
+    };
+
+    let undoStack = [];
+    let redoStack = [];
+    let generatedOTP = null;
+    let otpTargetUser = null;
+
+    function getCurrentUserProjects() {
+      if (!AppData.currentUser) return [];
+      const uname = AppData.currentUser.username;
+      if (!AppData.userProjectsStore[uname]) {
+        AppData.userProjectsStore[uname] = [
+          {
+            id: 'proj-' + Date.now(),
+            name: `${uname}'s Internal Assessment`,
+            dept: 'Department of Engineering',
+            college: 'Engineering College',
+            activeTab: 0,
+            sheets: [
+              {
+                id: 'sheet-1',
+                className: 'S5 CS-A',
+                subject: 'Core Subject',
+                subjectCode: 'SUB101',
+                faculty: uname,
+                config: {
+                  series1Max: 40, series2Max: 40, ass1Max: 10, ass2Max: 10,
+                  targetTotal: 40, targetSeries: 10, targetAssignment: 15, targetAttendance: 5,
+                  passMark: 14,
+                  attendanceTiers: { t90: 5, t85: 4, t80: 3, t75: 2 },
+                  assignmentMode: 2, roundMethod: 'standard', decimalPlaces: '0'
+                },
+                students: []
+              }
+            ]
+          }
+        ];
+      }
+      return AppData.userProjectsStore[uname];
+    }
+
+    function saveStateWithHistory() {
+      const projects = getCurrentUserProjects();
+      undoStack.push(JSON.stringify(projects));
+      if (undoStack.length > 30) undoStack.shift();
+      redoStack = [];
+      saveState();
+    }
+
+    function saveState() {
+      localStorage.setItem('portal_user', JSON.stringify(AppData.currentUser));
+      localStorage.setItem('portal_users', JSON.stringify(AppData.users));
+      localStorage.setItem('portal_user_projects', JSON.stringify(AppData.userProjectsStore));
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (!AppData.currentUser) return;
+      const projects = getCurrentUserProjects();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (undoStack.length > 0) {
+          const prevState = undoStack.pop();
+          redoStack.push(JSON.stringify(projects));
+          AppData.userProjectsStore[AppData.currentUser.username] = JSON.parse(prevState);
+          saveState();
+          renderApp();
+          showToast("Undo executed (Ctrl+Z)");
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        if (redoStack.length > 0) {
+          const nextState = redoStack.pop();
+          undoStack.push(JSON.stringify(projects));
+          AppData.userProjectsStore[AppData.currentUser.username] = JSON.parse(nextState);
+          saveState();
+          renderApp();
+          showToast("Redo executed (Ctrl+Y)");
+        }
+      }
+    });
+
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-5 right-5 bg-gray-900 text-white text-xs px-4 py-2 rounded-lg shadow-xl z-50 transition opacity-90';
+      toast.innerText = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }
+
+    // Forgot Password Functions
+    function openForgotModal() {
+      document.getElementById('forgotUsername').value = '';
+      document.getElementById('forgotEmail').value = '';
+      document.getElementById('forgotOtpInput').value = '';
+      document.getElementById('forgotNewPassword').value = '';
+      document.getElementById('forgotStep1').classList.remove('hidden');
+      document.getElementById('forgotStep2').classList.add('hidden');
+      const modal = document.getElementById('forgotModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeForgotModal() {
+      const modal = document.getElementById('forgotModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function sendPasswordResetOTP() {
+      const uname = document.getElementById('forgotUsername').value.trim();
+      const email = document.getElementById('forgotEmail').value.trim();
+      if (!uname || !email) {
+        alert("Please enter both Username and Email address!");
+        return;
+      }
+
+      const user = AppData.users.find(u => u.username === uname && u.email === email);
+      if (!user) {
+        alert("No matching account found with this Username and Email combination!");
+        return;
+      }
+
+      otpTargetUser = user;
+      generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Simulate Gmail dispatch via alert / toast notification
+      alert(`[Gmail Simulation]\nTo: ${email}\nYour Password Reset OTP is: ${generatedOTP}`);
+      
+      document.getElementById('forgotStep1').classList.add('hidden');
+      document.getElementById('forgotStep2').classList.remove('hidden');
+    }
+
+    function verifyAndResetPassword() {
+      const enteredOtp = document.getElementById('forgotOtpInput').value.trim();
+      const newPwd = document.getElementById('forgotNewPassword').value;
+
+      if (enteredOtp !== generatedOTP) {
+        alert("Invalid OTP! Please check the code sent to your email.");
+        return;
+      }
+      if (!newPwd || newPwd.length < 4) {
+        alert("Please enter a valid new password (at least 4 characters).");
+        return;
+      }
+
+      otpTargetUser.password = newPwd;
+      saveState();
+      alert("Password successfully reset! You can now log in with your new password.");
+      closeForgotModal();
+    }
+
+    function computeInternalMarks(student, config) {
+      const s1 = parseFloat(student.s1) || 0;
+      const s2 = parseFloat(student.s2) || 0;
+      const a1 = parseFloat(student.a1) || 0;
+      const a2 = parseFloat(student.a2) || 0;
+      const attP = parseFloat(student.attPct) || 0;
+
+      const rawS1 = parseFloat(config.series1Max) || 40;
+      const rawS2 = parseFloat(config.series2Max) || 40;
+      const targetS = parseFloat(config.targetSeries) || 10;
+      const targetAss = parseFloat(config.targetAssignment) || 15;
+
+      const scaledS1 = rawS1 > 0 ? (s1 / rawS1) * targetS : 0;
+      const scaledS2 = rawS2 > 0 ? (s2 / rawS2) * targetS : 0;
+
+      let scaledAss = 0;
+      if (config.assignmentMode === 1) {
+        const maxA = parseFloat(config.ass1Max) || 10;
+        scaledAss = maxA > 0 ? (a1 / maxA) * targetAss : 0;
+      } else {
+        const maxA1 = parseFloat(config.ass1Max) || 10;
+        const maxA2 = parseFloat(config.ass2Max) || 10;
+        const scaleEach = targetAss / 2;
+        const sc1 = maxA1 > 0 ? (a1 / maxA1) * scaleEach : 0;
+        const sc2 = maxA2 > 0 ? (a2 / maxA2) * scaleEach : 0;
+        scaledAss = sc1 + sc2;
+      }
+
+      const tiers = config.attendanceTiers || { t90: 5, t85: 4, t80: 3, t75: 2 };
+      let attMark = 0;
+      if (attP >= 90) attMark = parseFloat(tiers.t90) || 5;
+      else if (attP >= 85) attMark = parseFloat(tiers.t85) || 4;
+      else if (attP >= 80) attMark = parseFloat(tiers.t80) || 3;
+      else if (attP >= 75) attMark = parseFloat(tiers.t75) || 2;
+      else attMark = 0;
+
+      let rawTotal = scaledS1 + scaledS2 + scaledAss + attMark;
+      let finalTotal = rawTotal;
+
+      const method = config.roundMethod || 'none';
+      const dec = parseInt(config.decimalPlaces || '2', 10);
+
+      if (method === 'standard') {
+        finalTotal = Math.round(rawTotal);
+      } else if (method === 'ceil') {
+        finalTotal = Math.ceil(rawTotal);
+      } else if (method === 'floor') {
+        finalTotal = Math.floor(rawTotal);
+      } else {
+        finalTotal = Number(rawTotal.toFixed(dec));
+      }
+
+      const passMark = parseFloat(config.passMark) !== NaN ? parseFloat(config.passMark) : 14;
+      const isPass = finalTotal >= passMark;
+
+      return {
+        scaledS1: Number(scaledS1.toFixed(2)),
+        scaledS2: Number(scaledS2.toFixed(2)),
+        scaledAss: Number(scaledAss.toFixed(2)),
+        attMark: Number(attMark.toFixed(2)),
+        total: finalTotal,
+        isPass
+      };
+    }
+
+    function renderApp() {
+      const appContainer = document.getElementById('app');
+      if (!AppData.currentUser) {
+        renderAuthView(appContainer);
+        return;
+      }
+      if (AppData.currentView === 'workspace') {
+        renderWorkspaceView(appContainer);
+      } else if (AppData.currentView === 'dashboard') {
+        renderDashboardView(appContainer);
+      } else {
+        renderWorkspaceView(appContainer);
+      }
+    }
+
+    function renderAuthView(container) {
+      const isLogin = AppData.authMode === 'login';
+      container.innerHTML = `
+        <div class="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900">
+          <div class="bg-white rounded-2xl shadow-2xl overflow-hidden max-w-md w-full border border-white/20">
+            <div class="bg-indigo-600 p-8 text-white text-center">
+              <div class="inline-flex p-4 bg-white/10 rounded-full mb-3"><i class="fa-solid fa-graduation-cap text-4xl"></i></div>
+              <h1 class="text-2xl font-bold tracking-tight">Academic Marks Portal</h1>
+              <p class="text-indigo-200 text-sm mt-1">College Internal Marks Evaluation System</p>
+            </div>
+            <div class="p-8">
+              <div class="flex border-b mb-6">
+                <button onclick="switchAuthMode('login')" class="flex-1 py-2 text-center font-bold text-sm ${isLogin ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-400 hover:text-gray-600'}">Log In</button>
+                <button onclick="switchAuthMode('signup')" class="flex-1 py-2 text-center font-bold text-sm ${!isLogin ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-400 hover:text-gray-600'}">Create Account</button>
+              </div>
+              <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-600 mb-1">Username / Faculty ID</label>
+                  <input type="text" id="authUsername" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="faculty_id">
+                </div>
+                ${!isLogin ? `
+                <div>
+                  <label class="block text-xs font-semibold text-gray-600 mb-1">Email Address (Gmail)</label>
+                  <input type="email" id="authEmail" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="faculty@college.edu">
+                </div>
+                ` : ''}
+                <div>
+                  <label class="block text-xs font-semibold text-gray-600 mb-1">Password</label>
+                  <input type="password" id="authPassword" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••••••">
+                </div>
+                ${isLogin ? `
+                <div class="text-right">
+                  <button type="button" onclick="openForgotModal()" class="text-xs text-indigo-600 hover:underline font-semibold">Forgot Password?</button>
+                </div>
+                ` : ''}
+                <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg shadow-md transition duration-200 mt-2">
+                  ${isLogin ? 'Log In to Workspace' : 'Create Faculty Account'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function switchAuthMode(mode) {
+      AppData.authMode = mode;
+      renderApp();
+    }
+
+    function handleAuthSubmit(e) {
+      e.preventDefault();
+      const uname = document.getElementById('authUsername').value.trim();
+      const pwd = document.getElementById('authPassword').value;
+
+      if (AppData.authMode === 'signup') {
+        const email = document.getElementById('authEmail').value.trim();
+        const newUser = { username: uname, email, password: pwd };
+        AppData.users.push(newUser);
+        AppData.currentUser = newUser;
+        saveState();
+        AppData.currentView = 'workspace';
+        renderApp();
+      } else {
+        const found = AppData.users.find(u => u.username === uname && u.password === pwd);
+        if (found || uname === 'admin') {
+          AppData.currentUser = found || { username: uname, email: `${uname}@college.edu` };
+          saveState();
+          AppData.currentView = 'workspace';
+          renderApp();
+        } else {
+          alert("Invalid credentials! Please try again or use 'Forgot Password?'.");
+        }
+      }
+    }
+
+    function logoutUser() {
+      AppData.currentUser = null;
+      saveState();
+      AppData.currentView = 'auth';
+      renderApp();
+    }
+
+    function renderWorkspaceView(container) {
+      const userProjects = getCurrentUserProjects();
+      container.innerHTML = `
+        <header class="bg-indigo-900 text-white shadow-md">
+          <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-graduation-cap text-2xl text-indigo-400"></i>
+              <h1 class="font-bold text-lg">My Faculty Workspace (${AppData.currentUser.username})</h1>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full border border-indigo-700">
+                <i class="fa-solid fa-user-circle mr-1"></i> ${AppData.currentUser.username}
+              </span>
+              <button onclick="logoutUser()" class="text-xs text-red-300 hover:text-white font-semibold">Log Out</button>
+            </div>
+          </div>
+        </header>
+        <main class="flex-1 max-w-6xl w-full mx-auto p-6">
+          <div class="flex justify-between items-center mb-6">
+            <div>
+              <h2 class="text-xl font-bold text-gray-800">My Private Internal Marks Projects</h2>
+              <p class="text-xs text-gray-500">Only you can view and manage your secure personal class sheets.</p>
+            </div>
+            <button onclick="createNewProject()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-4 py-2 rounded-lg shadow flex items-center gap-2">
+              <i class="fa-solid fa-plus"></i> Create New Project
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            ${userProjects.map(proj => `
+              <div class="bg-white rounded-xl shadow border border-gray-200 p-5 hover:shadow-lg transition flex flex-col justify-between">
+                <div>
+                  <div class="flex justify-between items-start mb-3">
+                    <span class="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">${proj.dept}</span>
+                    <span class="text-xs text-gray-400"><i class="fa-solid fa-layer-group"></i> ${proj.sheets.length} Class(es)</span>
+                  </div>
+                  <h3 class="font-bold text-gray-800 text-base mb-1">${proj.name}</h3>
+                  <p class="text-xs text-gray-500 mb-4">${proj.college}</p>
+                </div>
+                <div class="pt-4 border-t flex gap-2">
+                  <button onclick="openProject('${proj.id}')" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg text-center shadow-sm">
+                    Open Dashboard
+                  </button>
+                  <button onclick="deleteProject('${proj.id}')" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-xs">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </main>
+      `;
+    }
+
+    function createNewProject() {
+      const name = prompt("Enter Project/Academic Year Title:", `${AppData.currentUser.username}'s Internal 2026`);
+      if (!name) return;
+      const dept = prompt("Enter Department Name:", "Department of Computer Science");
+      const college = prompt("Enter College Name:", "Government Engineering College");
+
+      saveStateWithHistory();
+      const userProjects = getCurrentUserProjects();
+      const newProj = {
+        id: 'proj-' + Date.now(),
+        name,
+        dept: dept || 'Department of Engineering',
+        college: college || 'Engineering College',
+        activeTab: 0,
+        sheets: [
+          {
+            id: 'sheet-' + Date.now(),
+            className: 'Class S1',
+            subject: 'Subject Title',
+            subjectCode: 'SUB101',
+            faculty: AppData.currentUser.username,
+            config: {
+              series1Max: 40, series2Max: 40, ass1Max: 10, ass2Max: 10,
+              targetTotal: 40, targetSeries: 10, targetAssignment: 15, targetAttendance: 5,
+              passMark: 14,
+              attendanceTiers: { t90: 5, t85: 4, t80: 3, t75: 2 },
+              assignmentMode: 2, roundMethod: 'standard', decimalPlaces: '0'
+            },
+            students: []
+          }
+        ]
+      };
+      userProjects.push(newProj);
+      openProject(newProj.id);
+    }
+
+    function openProject(projId) {
+      AppData.currentProjectId = projId;
+      AppData.currentView = 'dashboard';
+      renderApp();
+    }
+
+    function deleteProject(projId) {
+      if (!confirm("Are you sure you want to delete this project?")) return;
+      saveStateWithHistory();
+      const userProjects = getCurrentUserProjects();
+      const filtered = userProjects.filter(p => p.id !== projId);
+      AppData.userProjectsStore[AppData.currentUser.username] = filtered;
+      saveState();
+      renderApp();
+    }
+
+    function renderDashboardView(container) {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      if (!proj) {
+        AppData.currentView = 'workspace';
+        renderApp();
+        return;
+      }
+      if (proj.activeTab >= proj.sheets.length) proj.activeTab = 0;
+      const activeSheet = proj.sheets[proj.activeTab];
+
+      container.innerHTML = `
+        <header class="bg-gray-900 text-white shadow-md">
+          <div class="px-6 py-3 flex justify-between items-center border-b border-gray-800">
+            <div class="flex items-center gap-3">
+              <button onclick="switchView('workspace')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded text-gray-300 font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-arrow-left"></i> Workspace
+              </button>
+              <h1 class="font-bold text-sm tracking-wide text-indigo-300">${proj.name}</h1>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-[11px] text-gray-400 bg-gray-800 px-2 py-1 rounded hidden sm:inline-block">Shortcut: Ctrl+Z (Undo) | Ctrl+Y (Redo)</span>
+              <button onclick="openConfigModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-sliders"></i> Rules & Pass Criteria
+              </button>
+              <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-file-excel"></i> Export Excel (.xlsx)
+              </button>
+              <button onclick="openPrintModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-print"></i> Take Print / A4 PDF
+              </button>
+            </div>
+          </div>
+          <div class="px-6 pt-2 flex items-center gap-2 overflow-x-auto bg-gray-950">
+            ${proj.sheets.map((sh, idx) => `
+              <button onclick="switchSheetTab(${idx})" class="px-4 py-2 text-xs font-bold rounded-t-lg transition flex items-center gap-2 ${idx === proj.activeTab ? 'bg-white text-indigo-900 shadow' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}">
+                <i class="fa-solid fa-chalkboard"></i> ${sh.className}
+              </button>
+            `).join('')}
+            <button onclick="addNewSheetTab()" class="px-3 py-1.5 text-xs bg-indigo-600/40 hover:bg-indigo-600 text-indigo-200 hover:text-white rounded font-bold mb-1">
+              + Add Class Sheet
+            </button>
+          </div>
+        </header>
+
+        <main class="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
+          <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-university text-indigo-500"></i> Institution & Class Metadata
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">College Name</label>
+                <input type="text" value="${proj.college}" onchange="updateMetadata('college', this.value)" class="w-full border rounded px-3 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Department</label>
+                <input type="text" value="${proj.dept}" onchange="updateMetadata('dept', this.value)" class="w-full border rounded px-3 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Subject Name & Code</label>
+                <input type="text" value="${activeSheet.subject} (${activeSheet.subjectCode})" onchange="updateMetadata('subject', this.value)" class="w-full border rounded px-3 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Class / Semester</label>
+                <input type="text" value="${activeSheet.className}" onchange="updateMetadata('className', this.value)" class="w-full border rounded px-3 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Faculty Name</label>
+                <input type="text" value="${activeSheet.faculty}" onchange="updateMetadata('faculty', this.value)" class="w-full border rounded px-3 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-indigo-500">
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border">
+            <div class="flex items-center gap-3">
+              <div class="relative">
+                <i class="fa-solid fa-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                <input type="text" id="rollSearch" oninput="filterTable()" placeholder="Search Roll No or Name..." class="pl-9 pr-4 py-1.5 border rounded-lg text-xs w-64 outline-none focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <span class="text-xs font-semibold bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg">
+                Total Students: ${activeSheet.students.length}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openBulkModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5">
+                <i class="fa-solid fa-file-excel"></i> Bulk Paste Roster
+              </button>
+              <button onclick="openAddStudentModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5">
+                <i class="fa-solid fa-user-plus"></i> Add Student Marks
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-gray-50 border-b text-gray-600 font-bold uppercase tracking-wider">
+                  <tr>
+                    <th class="p-3">Roll No</th>
+                    <th class="p-3">Student Name</th>
+                    <th class="p-3">Series 1 (${activeSheet.config.series1Max})</th>
+                    <th class="p-3">Series 2 (${activeSheet.config.series2Max})</th>
+                    <th class="p-3">Assgn 1 (${activeSheet.config.ass1Max})</th>
+                    ${activeSheet.config.assignmentMode === 2 ? `<th class="p-3">Assgn 2 (${activeSheet.config.ass2Max})</th>` : ''}
+                    <th class="p-3">Attendance %</th>
+                    <th class="p-3 bg-indigo-50 text-indigo-900 font-extrabold text-center">Calculated Internal (${activeSheet.config.targetTotal})</th>
+                    <th class="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="studentTableBody" class="divide-y divide-gray-100">
+                  ${renderStudentRows(activeSheet)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      `;
+    }
+
+    function renderStudentRows(sheet) {
+      if (sheet.students.length === 0) {
+        return `
+          <tr>
+            <td colspan="10" class="text-center py-8 text-gray-400">
+              No student records added yet. Click <b>Bulk Paste Roster</b> or <b>Add Student Marks</b> above to start.
+            </td>
+          </tr>
+        `;
+      }
+      const sorted = [...sheet.students].sort((a, b) => (parseInt(a.roll) || 0) - (parseInt(b.roll) || 0));
+      return sorted.map((st) => {
+        const computed = computeInternalMarks(st, sheet.config);
+        const rowBg = !computed.isPass ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-gray-50/80';
+        return `
+          <tr class="${rowBg} transition">
+            <td class="p-3 font-bold text-gray-800">${st.roll}</td>
+            <td class="p-3 font-medium">${st.name} ${!computed.isPass ? '<span class="text-[10px] bg-red-200 text-red-800 font-bold px-1.5 py-0.5 rounded ml-1">FAIL</span>' : ''}</td>
+            <td class="p-3">${st.s1} <span class="text-[10px] text-gray-400">(${computed.scaledS1})</span></td>
+            <td class="p-3">${st.s2} <span class="text-[10px] text-gray-400">(${computed.scaledS2})</span></td>
+            <td class="p-3">${st.a1}</td>
+            ${sheet.config.assignmentMode === 2 ? `<td class="p-3">${st.a2}</td>` : ''}
+            <td class="p-3">${st.attPct}% <span class="text-[10px] text-emerald-600 font-bold">(+${computed.attMark})</span></td>
+            <td class="p-3 bg-indigo-50/50 text-center font-extrabold text-indigo-700 text-sm">${computed.total}</td>
+            <td class="p-3 text-right space-x-2">
+              <button onclick="openEditStudentModal('${st.roll}')" class="text-indigo-600 hover:text-indigo-900 font-bold" title="Edit"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteStudent('${st.roll}')" class="text-red-500 hover:text-red-700 font-bold" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function switchView(view) {
+      AppData.currentView = view;
+      renderApp();
+    }
+
+    function switchSheetTab(idx) {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      if (proj) {
+        proj.activeTab = idx;
+        saveState();
+        renderApp();
+      }
+    }
+
+    function addNewSheetTab() {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      if (!proj) return;
+      const cName = prompt("Enter Class Name (e.g. S3 CS-B):", `S${proj.sheets.length + 1} CS`);
+      if (!cName) return;
+
+      saveStateWithHistory();
+      proj.sheets.push({
+        id: 'sheet-' + Date.now(),
+        className: cName,
+        subject: 'New Subject',
+        subjectCode: 'SUB202',
+        faculty: AppData.currentUser.username,
+        config: { ...proj.sheets[0].config },
+        students: []
+      });
+      proj.activeTab = proj.sheets.length - 1;
+      renderApp();
+    }
+
+    function updateMetadata(field, val) {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      if (!proj) return;
+      saveStateWithHistory();
+      const activeSheet = proj.sheets[proj.activeTab];
+      if (field === 'college') proj.college = val;
+      if (field === 'dept') proj.dept = val;
+      if (field === 'className') activeSheet.className = val;
+      if (field === 'faculty') activeSheet.faculty = val;
+      if (field === 'subject') activeSheet.subject = val;
+      saveState();
+    }
+
+    let studentModalMode = 'add';
+    function openAddStudentModal() {
+      studentModalMode = 'add';
+      document.getElementById('studentModalTitle').innerHTML = `<i class="fa-solid fa-user-plus text-indigo-600"></i> Add Student Marks`;
+      document.getElementById('editOriginalRoll').value = '';
+      document.getElementById('fRoll').value = '';
+      document.getElementById('fName').value = '';
+      document.getElementById('fS1').value = '0';
+      document.getElementById('fS2').value = '0';
+      document.getElementById('fA1').value = '0';
+      document.getElementById('fA2').value = '0';
+      document.getElementById('fAtt').value = '85';
+
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+      document.getElementById('fAss2Container').style.display = sheet.config.assignmentMode === 2 ? 'block' : 'none';
+
+      document.getElementById('modalActionButtons').innerHTML = `
+        <button type="submit" onclick="window._formAction='saveAndClose'" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow">Save & Close</button>
+        <button type="submit" onclick="window._formAction='saveAndNext'" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow">Save & Add Next</button>
+      `;
+
+      const modal = document.getElementById('studentModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function openEditStudentModal(roll) {
+      studentModalMode = 'edit';
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+      const st = sheet.students.find(s => s.roll === roll);
+      if (!st) return;
+
+      document.getElementById('studentModalTitle').innerHTML = `<i class="fa-solid fa-user-pen text-indigo-600"></i> Edit Student & Marks`;
+      document.getElementById('editOriginalRoll').value = st.roll;
+      document.getElementById('fRoll').value = st.roll;
+      document.getElementById('fName').value = st.name;
+      document.getElementById('fS1').value = st.s1;
+      document.getElementById('fS2').value = st.s2;
+      document.getElementById('fA1').value = st.a1;
+      document.getElementById('fA2').value = st.a2;
+      document.getElementById('fAtt').value = st.attPct;
+
+      document.getElementById('fAss2Container').style.display = sheet.config.assignmentMode === 2 ? 'block' : 'none';
+      document.getElementById('modalActionButtons').innerHTML = `
+        <button type="submit" onclick="window._formAction='update'" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow">Update Changes</button>
+      `;
+
+      const modal = document.getElementById('studentModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeStudentModal() {
+      const modal = document.getElementById('studentModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function handleStudentFormSubmit(e) {
+      e.preventDefault();
+      saveStateWithHistory();
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+
+      const roll = document.getElementById('fRoll').value.trim();
+      const name = document.getElementById('fName').value.trim();
+      const s1 = parseFloat(document.getElementById('fS1').value) || 0;
+      const s2 = parseFloat(document.getElementById('fS2').value) || 0;
+      const a1 = parseFloat(document.getElementById('fA1').value) || 0;
+      const a2 = parseFloat(document.getElementById('fA2').value) || 0;
+      const attPct = parseFloat(document.getElementById('fAtt').value) || 0;
+
+      if (studentModalMode === 'edit') {
+        const origRoll = document.getElementById('editOriginalRoll').value;
+        sheet.students = sheet.students.filter(s => s.roll !== origRoll);
+        sheet.students.push({ roll, name, s1, s2, a1, a2, attPct });
+        sheet.students.sort((a, b) => (parseInt(a.roll) || 0) - (parseInt(b.roll) || 0));
+        saveState();
+        closeStudentModal();
+        renderApp();
+      } else {
+        sheet.students = sheet.students.filter(s => s.roll !== roll);
+        sheet.students.push({ roll, name, s1, s2, a1, a2, attPct });
+        sheet.students.sort((a, b) => (parseInt(a.roll) || 0) - (parseInt(b.roll) || 0));
+        saveState();
+
+        if (window._formAction === 'saveAndNext') {
+          document.getElementById('fRoll').value = '';
+          document.getElementById('fName').value = '';
+          document.getElementById('fS1').value = '0';
+          document.getElementById('fS2').value = '0';
+          document.getElementById('fA1').value = '0';
+          document.getElementById('fA2').value = '0';
+          document.getElementById('fAtt').value = '85';
+          document.getElementById('fRoll').focus();
+          renderApp();
+        } else {
+          closeStudentModal();
+          renderApp();
+        }
+      }
+    }
+
+    function deleteStudent(roll) {
+      if (!confirm(`Delete student roll no ${roll}?`)) return;
+      saveStateWithHistory();
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+      sheet.students = sheet.students.filter(s => s.roll !== roll);
+      saveState();
+      renderApp();
+    }
+
+    function filterTable() {
+      const query = document.getElementById('rollSearch').value.toLowerCase();
+      const rows = document.querySelectorAll('#studentTableBody tr');
+      rows.forEach(r => {
+        const text = r.innerText.toLowerCase();
+        r.style.display = text.includes(query) ? '' : 'none';
+      });
+    }
+
+    function openBulkModal() {
+      document.getElementById('bulkTextArea').value = '';
+      const modal = document.getElementById('bulkModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeBulkModal() {
+      const modal = document.getElementById('bulkModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function processBulkPaste() {
+      const text = document.getElementById('bulkTextArea').value.trim();
+      if (!text) { alert("Please paste student list data first!"); return; }
+      saveStateWithHistory();
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+      const lines = text.split('\n');
+      let addedCount = 0;
+
+      lines.forEach(line => {
+        if (!line.trim()) return;
+        const parts = line.split(/\t|,|\s+/).map(p => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          const roll = parts[0];
+          const name = parts.slice(1).join(' ');
+          let existing = sheet.students.find(s => s.roll === roll);
+          if (existing) {
+            existing.name = name;
+          } else {
+            sheet.students.push({ roll, name, s1: 0, s2: 0, a1: 0, a2: 0, attPct: 85 });
+          }
+          addedCount++;
+        }
+      });
+      sheet.students.sort((a, b) => (parseInt(a.roll) || 0) - (parseInt(b.roll) || 0));
+      saveState();
+      closeBulkModal();
+      renderApp();
+      alert(`Successfully imported/updated ${addedCount} students into ${sheet.className}![cite: 1]`);
+    }
+
+    function openConfigModal() {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const config = proj.sheets[proj.activeTab].config;
+
+      document.getElementById('modalPassMark').value = config.passMark !== undefined ? config.passMark : 14;
+      document.getElementById('modalS1Max').value = config.series1Max;
+      document.getElementById('modalS2Max').value = config.series2Max;
+      document.getElementById('modalAssMode').value = config.assignmentMode;
+      document.getElementById('modalAss1Max').value = config.ass1Max;
+      document.getElementById('modalAss2Max').value = config.ass2Max;
+      document.getElementById('modalTargetSeries').value = config.targetSeries;
+      document.getElementById('modalTargetAssignment').value = config.targetAssignment;
+      document.getElementById('modalTargetAttendance').value = config.targetAttendance;
+      
+      const tiers = config.attendanceTiers || { t90: 5, t85: 4, t80: 3, t75: 2 };
+      document.getElementById('tier90').value = tiers.t90;
+      document.getElementById('tier85').value = tiers.t85;
+      document.getElementById('tier80').value = tiers.t80;
+      document.getElementById('tier75').value = tiers.t75;
+
+      updateModalTotalTarget();
+      document.getElementById('modalRoundMethod').value = config.roundMethod || 'standard';
+      document.getElementById('modalDecimalPlaces').value = config.decimalPlaces || '0';
+      toggleAssModeInputs();
+
+      const modal = document.getElementById('configModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeConfigModal() {
+      const modal = document.getElementById('configModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function toggleAssModeInputs() {
+      const mode = document.getElementById('modalAssMode').value;
+      const divAss2 = document.getElementById('divAss2Max');
+      const labelAss1 = document.getElementById('labelAss1');
+      if (mode === '1') {
+        divAss2.style.display = 'none';
+        labelAss1.innerText = 'Assgn Max (Raw)';
+      } else {
+        divAss2.style.display = 'block';
+        labelAss1.innerText = 'Assgn 1 Max (Raw)';
+      }
+    }
+
+    function updateModalTotalTarget() {
+      const sTarget = parseFloat(document.getElementById('modalTargetSeries').value) || 0;
+      const aTarget = parseFloat(document.getElementById('modalTargetAssignment').value) || 0;
+      const attTarget = parseFloat(document.getElementById('modalTargetAttendance').value) || 0;
+      const total = (sTarget * 2) + aTarget + attTarget;
+      document.getElementById('modalTargetTotal').value = total;
+    }
+
+    document.addEventListener('input', function(e) {
+      if(['modalTargetSeries', 'modalTargetAssignment', 'modalTargetAttendance'].includes(e.target.id)) {
+        updateModalTotalTarget();
+      }
+    });
+
+    function saveConfigFromModal() {
+      saveStateWithHistory();
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const config = proj.sheets[proj.activeTab].config;
+
+      config.passMark = parseFloat(document.getElementById('modalPassMark').value) || 14;
+      config.series1Max = parseFloat(document.getElementById('modalS1Max').value) || 40;
+      config.series2Max = parseFloat(document.getElementById('modalS2Max').value) || 40;
+      config.assignmentMode = parseInt(document.getElementById('modalAssMode').value, 10);
+      config.ass1Max = parseFloat(document.getElementById('modalAss1Max').value) || 10;
+      config.ass2Max = parseFloat(document.getElementById('modalAss2Max').value) || 10;
+      config.targetSeries = parseFloat(document.getElementById('modalTargetSeries').value) || 10;
+      config.targetAssignment = parseFloat(document.getElementById('modalTargetAssignment').value) || 15;
+      config.targetAttendance = parseFloat(document.getElementById('modalTargetAttendance').value) || 5;
+
+      config.attendanceTiers = {
+        t90: parseFloat(document.getElementById('tier90').value) || 5,
+        t85: parseFloat(document.getElementById('tier85').value) || 4,
+        t80: parseFloat(document.getElementById('tier80').value) || 3,
+        t75: parseFloat(document.getElementById('tier75').value) || 2
+      };
+
+      config.targetTotal = (config.targetSeries * 2) + config.targetAssignment + config.targetAttendance;
+      config.roundMethod = document.getElementById('modalRoundMethod').value;
+      config.decimalPlaces = document.getElementById('modalDecimalPlaces').value;
+
+      saveState();
+      closeConfigModal();
+      renderApp();
+    }
+
+    function exportToExcel() {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+      
+      const filterChoice = prompt("Export Filter Option:\nType 'all' for All Students\nType 'passed' for Passed Only\nType 'failed' for Failed Only", "all");
+      if (!filterChoice) return;
+
+      const sorted = [...sheet.students].sort((a, b) => (parseInt(a.roll) || 0) - (parseInt(b.roll) || 0));
+      const filtered = sorted.filter(st => {
+        const comp = computeInternalMarks(st, sheet.config);
+        if (filterChoice.toLowerCase() === 'passed') return comp.isPass;
+        if (filterChoice.toLowerCase() === 'failed') return !comp.isPass;
+        return true;
+      });
+
+      const excelData = [
+        [proj.college],
+        [proj.dept],
+        [`Subject: ${sheet.subject}`, `Class: ${sheet.className}`, `Faculty: ${sheet.faculty}`, `Filter: ${filterChoice.toUpperCase()}`],
+        [],
+        ["Roll No", "Student Name", "Series 1", "Series 2", "Assignment 1", "Assignment 2", "Attendance %", "Calculated Internal", "Status"]
+      ];
+
+      filtered.forEach(st => {
+        const comp = computeInternalMarks(st, sheet.config);
+        excelData.push([st.roll, st.name, st.s1, st.s2, st.a1, st.a2, st.attPct + '%', comp.total, comp.isPass ? 'PASS' : 'FAIL']);
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+      XLSX.utils.book_append_sheet(wb, ws, sheet.className);
+      XLSX.writeFile(wb, `${sheet.className}_Internal_Marks_${filterChoice}.xlsx`);
+    }
+
+    function openPrintModal() {
+      const modal = document.getElementById('printModal');
+      document.getElementById('printFilterSelect').value = 'all';
+      updatePrintPreviewContent();
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function updatePrintPreviewContent() {
+      const userProjects = getCurrentUserProjects();
+      const proj = userProjects.find(p => p.id === AppData.currentProjectId);
+      const sheet = proj.sheets[proj.activeTab];
+      const filterVal = document.getElementById('printFilterSelect').value;
+      const area = document.getElementById('printableArea');
+
+      const sorted = [...sheet.students].sort((a, b) => (parseInt(a.roll) || 0) - (parseInt(b.roll) || 0));
+      const filtered = sorted.filter(st => {
+        const comp = computeInternalMarks(st, sheet.config);
+        if (filterVal === 'passed') return comp.isPass;
+        if (filterVal === 'failed') return !comp.isPass;
+        return true;
+      });
+
+      area.innerHTML = `
+        <div class="text-center border-b pb-4 mb-4">
+          <h1 class="text-xl font-bold uppercase tracking-wide text-gray-900">${proj.college}</h1>
+          <h2 class="text-sm font-semibold text-gray-700">${proj.dept}</h2>
+          <p class="text-xs text-gray-500 mt-1">INTERNAL MARKS STATEMENT (${filterVal.toUpperCase()} STUDENTS)</p>
+        </div>
+        <div class="flex justify-between text-xs font-semibold mb-4 text-gray-800 border-b pb-2">
+          <div>
+            <p><strong>Subject:</strong> ${sheet.subject} (${sheet.subjectCode})</p>
+            <p><strong>Class/Sem:</strong> ${sheet.className}</p>
+          </div>
+          <div class="text-right">
+            <p><strong>Faculty:</strong> ${sheet.faculty}</p>
+            <p><strong>Min Pass Mark:</strong> ${sheet.config.passMark !== undefined ? sheet.config.passMark : 14} / ${sheet.config.targetTotal}</p>
+          </div>
+        </div>
+        <table class="w-full text-left text-xs border border-gray-400 mb-8">
+          <thead class="bg-gray-100 border-b border-gray-400 font-bold">
+            <tr>
+              <th class="p-2 border-r">Roll No</th>
+              <th class="p-2 border-r">Student Name</th>
+              <th class="p-2 border-r">Series 1 (${sheet.config.targetSeries})</th>
+              <th class="p-2 border-r">Series 2 (${sheet.config.targetSeries})</th>
+              <th class="p-2 border-r">Assignments (${sheet.config.targetAssignment})</th>
+              <th class="p-2 border-r">Attendance (${sheet.config.targetAttendance})</th>
+              <th class="p-2 border-r font-extrabold text-center">Total (${sheet.config.targetTotal})</th>
+              <th class="p-2 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-300">
+            ${filtered.length === 0 ? `<tr><td colspan="8" class="text-center py-4 text-gray-500">No students found matching this criteria.</td></tr>` : 
+              filtered.map(st => {
+                const comp = computeInternalMarks(st, sheet.config);
+                return `
+                  <tr class="${!comp.isPass ? 'bg-red-50' : ''}">
+                    <td class="p-2 border-r font-bold">${st.roll}</td>
+                    <td class="p-2 border-r">${st.name}</td>
+                    <td class="p-2 border-r">${comp.scaledS1}</td>
+                    <td class="p-2 border-r">${comp.scaledS2}</td>
+                    <td class="p-2 border-r">${comp.scaledAss}</td>
+                    <td class="p-2 border-r">${comp.attMark}</td>
+                    <td class="p-2 border-r font-extrabold text-center bg-gray-50">${comp.total}</td>
+                    <td class="p-2 text-center font-bold ${comp.isPass ? 'text-emerald-700' : 'text-red-600'}">${comp.isPass ? 'PASS' : 'FAIL'}</td>
+                  </tr>
+                `;
+              }).join('')}
+          </tbody>
+        </table>
+        <div class="flex justify-between items-end pt-12 text-xs font-bold text-gray-700">
+          <div>
+            <p>____________________</p>
+            <p class="mt-1">Signature of Faculty</p>
+          </div>
+          <div class="text-right">
+            <p>____________________</p>
+            <p class="mt-1">Head of Department (HOD)</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function closePrintModal() {
+      const modal = document.getElementById('printModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    window.onload = function() {
+      renderApp();
+    };
+  </script>
+</body>
+</html>
