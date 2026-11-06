@@ -15,6 +15,15 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <style>
+    /* Custom Grid Borders for Tables */
+    .custom-table th, .custom-table td {
+      border-right: 1px solid #e5e7eb !important;
+      border-bottom: 1px solid #e5e7eb !important;
+    }
+    .custom-table th:last-child, .custom-table td:last-child {
+      border-right: none !important;
+    }
+
     @media print {
       body * { visibility: hidden; }
       #printableArea, #printableArea * { visibility: visible; }
@@ -435,7 +444,6 @@
       otpTargetUser = user;
       generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
       
-      // Simulate Gmail dispatch via alert / toast notification
       alert(`[Gmail Simulation]\nTo: ${email}\nYour Password Reset OTP is: ${generatedOTP}`);
       
       document.getElementById('forgotStep1').classList.add('hidden');
@@ -825,8 +833,8 @@
 
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-gray-50 border-b text-gray-600 font-bold uppercase tracking-wider">
+              <table class="w-full text-left text-xs custom-table border-collapse">
+                <thead class="bg-gray-100 border-b-2 border-gray-300 text-gray-700 font-bold uppercase tracking-wider">
                   <tr>
                     <th class="p-3">Roll No</th>
                     <th class="p-3">Student Name</th>
@@ -835,11 +843,11 @@
                     <th class="p-3">Assgn 1 (${activeSheet.config.ass1Max})</th>
                     ${activeSheet.config.assignmentMode === 2 ? `<th class="p-3">Assgn 2 (${activeSheet.config.ass2Max})</th>` : ''}
                     <th class="p-3">Attendance %</th>
-                    <th class="p-3 bg-indigo-50 text-indigo-900 font-extrabold text-center">Calculated Internal (${activeSheet.config.targetTotal})</th>
+                    <th class="p-3 bg-indigo-100/70 text-indigo-900 font-extrabold text-center">Calculated Internal (${activeSheet.config.targetTotal})</th>
                     <th class="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody id="studentTableBody" class="divide-y divide-gray-100">
+                <tbody id="studentTableBody" class="divide-y divide-gray-200">
                   ${renderStudentRows(activeSheet)}
                 </tbody>
               </table>
@@ -872,7 +880,7 @@
             <td class="p-3">${st.a1}</td>
             ${sheet.config.assignmentMode === 2 ? `<td class="p-3">${st.a2}</td>` : ''}
             <td class="p-3">${st.attPct}% <span class="text-[10px] text-emerald-600 font-bold">(+${computed.attMark})</span></td>
-            <td class="p-3 bg-indigo-50/50 text-center font-extrabold text-indigo-700 text-sm">${computed.total}</td>
+            <td class="p-3 bg-indigo-50/80 text-center font-extrabold text-indigo-700 text-sm">${computed.total}</td>
             <td class="p-3 text-right space-x-2">
               <button onclick="openEditStudentModal('${st.roll}')" class="text-indigo-600 hover:text-indigo-900 font-bold" title="Edit"><i class="fa-solid fa-pen"></i></button>
               <button onclick="deleteStudent('${st.roll}')" class="text-red-500 hover:text-red-700 font-bold" title="Delete"><i class="fa-solid fa-trash"></i></button>
