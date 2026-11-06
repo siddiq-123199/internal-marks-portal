@@ -409,7 +409,6 @@
       setTimeout(() => toast.remove(), 2500);
     }
 
-    // Forgot Password Functions
     function openForgotModal() {
       document.getElementById('forgotUsername').value = '';
       document.getElementById('forgotEmail').value = '';
@@ -1094,8 +1093,6 @@
 
       lines.forEach(line => {
         if (!line.trim()) return;
-        
-        // Smart split: handles tabs, commas, or consecutive spaces separating roll number and name
         const cleanLine = line.trim();
         let parts = [];
         if (cleanLine.includes('\t')) {
@@ -1103,7 +1100,6 @@
         } else if (cleanLine.includes(',')) {
           parts = cleanLine.split(',').map(p => p.trim()).filter(Boolean);
         } else {
-          // Split by first continuous whitespace or special separators
           const match = cleanLine.match(/^(\S+)\s+(.+)$/);
           if (match) {
             parts = [match[1], match[2].trim()];
