@@ -158,11 +158,12 @@
       </div>
 
       <div class="space-y-4">
-        <p class="text-xs text-gray-600">Excel sheet-il ninnu <b>Roll Number</b>yum <b>Student Name</b>um orumichu copy cheythu taazhe ulla box-il <b>Paste (Ctrl+V)</b> cheyyuka.</p>
+        <p class="text-xs text-gray-600">Excel sheet-il ninnu <b>Roll Number</b>yum <b>Student Name</b>um orumichu copy cheythu taazhe ulla box-il <b>Paste (Ctrl+V)</b> cheyyuka. (Tab, comma, allenkil spaces vechu separate cheythalum automatically detect aakum).</p>
         <div>
           <textarea id="bulkTextArea" rows="6" placeholder="Example:
-1	Aarav Nair
-2	Ananya Sharma" class="w-full border rounded-lg p-3 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+1    Aarav Nair
+2,   Ananya Sharma
+3    Rahul Dev" class="w-full border rounded-lg p-3 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
         </div>
       </div>
 
@@ -1093,7 +1094,24 @@
 
       lines.forEach(line => {
         if (!line.trim()) return;
-        const parts = line.split(/\t|,|\s+/).map(p => p.trim()).filter(Boolean);
+        
+        // Smart split: handles tabs, commas, or consecutive spaces separating roll number and name
+        const cleanLine = line.trim();
+        let parts = [];
+        if (cleanLine.includes('\t')) {
+          parts = cleanLine.split('\t').map(p => p.trim()).filter(Boolean);
+        } else if (cleanLine.includes(',')) {
+          parts = cleanLine.split(',').map(p => p.trim()).filter(Boolean);
+        } else {
+          // Split by first continuous whitespace or special separators
+          const match = cleanLine.match(/^(\S+)\s+(.+)$/);
+          if (match) {
+            parts = [match[1], match[2].trim()];
+          } else {
+            parts = cleanLine.split(/\s+/).map(p => p.trim()).filter(Boolean);
+          }
+        }
+
         if (parts.length >= 2) {
           const roll = parts[0];
           const name = parts.slice(1).join(' ');
@@ -1110,7 +1128,7 @@
       saveState();
       closeBulkModal();
       renderApp();
-      alert(`Successfully imported/updated ${addedCount} students into ${sheet.className}![cite: 1]`);
+      alert(`Successfully imported/updated ${addedCount} students into ${sheet.className}!`[cite: 1]);
     }
 
     function openConfigModal() {
